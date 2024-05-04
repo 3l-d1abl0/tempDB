@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"strings"
+	"tempDB/utils"
 )
 
 type Server struct {
@@ -87,8 +87,22 @@ func (server *Server) handleConnection(connection net.Conn) {
 		}
 	} //for
 
-	cmd := strings.Trim(buffer.String(), "\r\n")
-	args := strings.Split(cmd, " ")
+	request, err := utils.ParseCommands(buffer.String())
 
-	fmt.Println("[", args, "]")
+	if err != nil {
+		connection.Write([]byte(err.Error()))
+		return
+	}
+
+	strBytes := []byte(request.Command)
+	strSliceBytes := make([][]byte, len(request.Params))
+	for i, s := range request.Params {
+		strSliceBytes[i] = []byte(s)
+	}
+
+	// Join the byte slices into a single byte slice
+	byteSlice := bytes.Join(append([][]byte{strBytes}, strSliceBytes...), []byte{})
+
+	connection.Write(byteSlice)
+
 }
