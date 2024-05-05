@@ -4,17 +4,20 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"tempDB/engine"
 	"tempDB/utils"
 )
 
 type Server struct {
 	Addr     string
 	Listener net.Listener
+	Db       engine.Store
 }
 
 func Init(addr string) Server {
 	return Server{
 		Addr: addr,
+		Db:   engine.NewStore(),
 	}
 }
 
@@ -58,7 +61,7 @@ func (server *Server) Start() {
 
 func (server *Server) handleConnection(connection net.Conn) {
 
-	defer connection.Close()
+	//defer connection.Close()
 
 	fmt.Printf("Processing new connection :\n")
 
@@ -82,27 +85,39 @@ func (server *Server) handleConnection(connection net.Conn) {
 		if read == 0 || read < 4096 {
 			fmt.Println(received, buffer.Bytes())
 			//Command
-			fmt.Println((buffer))
-			break
+			//fmt.Println((buffer))
+
+			//check for command Validity
+			request, err := utils.ParseCommands(buffer.String())
+
+			if err != nil {
+				connection.Write([]byte(err.Error()))
+				continue
+			}
+
+			response, dbError := server.Db.CommandHandler(request)
+
+			if dbError != nil {
+				fmt.Println("ERR: ", dbError)
+				connection.Write([]byte("Failed"))
+			} else {
+				fmt.Println("RES: ", response)
+				connection.Write([]byte(response))
+			}
+
 		}
 	} //for
 
-	request, err := utils.ParseCommands(buffer.String())
+	/*
+		strBytes := []byte(request.Command)
+		strSliceBytes := make([][]byte, len(request.Params))
+		for i, s := range request.Params {
+			strSliceBytes[i] = []byte(s)
+		}
 
-	if err != nil {
-		connection.Write([]byte(err.Error()))
-		return
-	}
+		// Join the byte slices into a single byte slice
+		byteSlice := bytes.Join(append([][]byte{strBytes}, strSliceBytes...), []byte{})
 
-	strBytes := []byte(request.Command)
-	strSliceBytes := make([][]byte, len(request.Params))
-	for i, s := range request.Params {
-		strSliceBytes[i] = []byte(s)
-	}
-
-	// Join the byte slices into a single byte slice
-	byteSlice := bytes.Join(append([][]byte{strBytes}, strSliceBytes...), []byte{})
-
-	connection.Write(byteSlice)
-
+		connection.Write(byteSlice)
+	*/
 }

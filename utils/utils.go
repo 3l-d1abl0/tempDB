@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -31,7 +32,7 @@ func ParseCommands(input string) (Request, error) {
 	cmd := strings.Trim(input, "\r\n")
 	args := strings.Split(cmd, " ")
 
-	//fmt.Println("[", args, "]")
+	fmt.Println("[", args, "]")
 
 	//If empty
 	if len(args) == 0 {
