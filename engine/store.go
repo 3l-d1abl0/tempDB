@@ -45,7 +45,7 @@ func (db *Store) executePing() ([]byte, error) {
 func (db *Store) executeGet(params []string) ([]byte, error) {
 
 	db.Mutex.RLock()
-	defer db.Mutex.RLock()
+	defer db.Mutex.RUnlock()
 	if value, exists := db.Kv[params[0]]; exists {
 		return value, nil
 	}
