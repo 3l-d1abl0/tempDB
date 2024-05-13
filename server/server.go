@@ -83,12 +83,13 @@ func (server *Server) handleConnection(connection net.Conn) {
 		buffer.Write(chunk[:read])
 
 		if read == 0 || read < 4096 {
-			fmt.Println(received, buffer.Bytes())
+			//fmt.Println(received, buffer.Bytes())
 			//Command
 			//fmt.Println((buffer))
 
 			//check for command Validity
 			request, err := utils.ParseCommands(buffer.String())
+			buffer.Reset()
 
 			if err != nil {
 				connection.Write([]byte(err.Error()))
@@ -101,7 +102,7 @@ func (server *Server) handleConnection(connection net.Conn) {
 				fmt.Println("ERR: ", dbError)
 				connection.Write([]byte("Failed"))
 			} else {
-				fmt.Println("RES: ", response)
+				fmt.Println("RES: ", string(response))
 				connection.Write([]byte(response))
 			}
 
