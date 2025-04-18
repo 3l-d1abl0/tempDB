@@ -32,7 +32,10 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 		return db.executeGet(command.Params)
 	case "SET":
 		return db.executeSet(command.Params)
-
+	case "DEL":
+		return db.executeDel(command.Params)
+	case "FLUSHDB":
+		return db.executeFlushDB()
 	default:
 		return []byte(""), errors.New("invalid command [Handler]")
 	}
@@ -63,6 +66,33 @@ func (db *Store) executeSet(params []string) ([]byte, error) {
 
 	fmt.Println(key, value)
 	db.Kv[key] = value
-	return []byte("(nil)"), nil
+	return []byte("OK"), nil
 
+}
+
+func (db *Store) executeDel(params []string) ([]byte, error) {
+	if len(params) < 1 {
+		return []byte(""), errors.New("DEL command requires at least one key")
+	}
+
+	db.Mutex.Lock()
+	defer db.Mutex.Unlock()
+
+	key := params[0]
+	if _, exists := db.Kv[key]; exists {
+		delete(db.Kv, key)
+		return []byte("1"), nil // Returns 1 if key was deleted
+	}
+
+	return []byte("0"), nil // Returns 0 if key didn't exist
+}
+
+func (db *Store) executeFlushDB() ([]byte, error) {
+	db.Mutex.Lock()
+	defer db.Mutex.Unlock()
+
+	// Clear the map
+	db.Kv = make(map[string][]byte)
+
+	return []byte("OK"), nil
 }

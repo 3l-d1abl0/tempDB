@@ -20,6 +20,10 @@ func validCommand(cmd string) bool {
 		return true
 	case "SET":
 		return true
+	case "DEL":
+		return true
+	case "FLUSHDB":
+		return true
 
 	default:
 		return false
