@@ -24,6 +24,8 @@ func validCommand(cmd string) bool {
 		return true
 	case "FLUSHDB":
 		return true
+	case "EXPIRE":
+		return true
 
 	default:
 		return false
