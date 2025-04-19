@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"tempDB/config"
 	"tempDB/utils"
 	"time"
 )
@@ -27,25 +28,21 @@ type Store struct {
 	numSegments uint32
 }
 
-func (s *Store) getSegment(key string) *segment {
-	//Generate hash for Key
-	h := fnv.New32a()
-	h.Write([]byte(key))
-	return s.segments[h.Sum32()%s.numSegments]
-}
-
 func NewStore() Store {
 
-	// 4 segments per CPU core
-	numSegments := uint32(runtime.NumCPU() * 4)
+	//get db config
+	cfg := config.GetStoreConfig()
+	numSegments := uint32(runtime.NumCPU() * cfg.SegmentsPerCPU)
 	segments := make([]*segment, numSegments)
 
-	for i, _ := range segments {
+	cleanupInterval := time.Duration(cfg.CleanupIntervalSeconds) * time.Second
 
+	//Initalize each segment
+	for i := range segments {
 		segments[i] = &segment{
 			mutex:         &sync.RWMutex{},
 			kv:            make(map[string]KeyValue),
-			cleanupTicker: time.NewTicker(time.Second * 1),
+			cleanupTicker: time.NewTicker(cleanupInterval),
 		}
 
 		//goroutine to check expiry for every segment
@@ -56,6 +53,13 @@ func NewStore() Store {
 		segments:    segments,
 		numSegments: numSegments,
 	}
+}
+
+func (s *Store) getSegment(key string) *segment {
+	//Generate hash for Key
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return s.segments[h.Sum32()%s.numSegments]
 }
 
 func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {

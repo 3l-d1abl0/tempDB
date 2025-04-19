@@ -4,29 +4,32 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"tempDB/config"
 	"tempDB/engine"
 	"tempDB/utils"
 )
 
 type Server struct {
-	Addr     string
 	Listener net.Listener
 	Db       engine.Store
 }
 
-func Init(addr string) Server {
+func Init() Server {
+	//cfg := config.GetServerConfig()
 	return Server{
-		Addr: addr,
-		Db:   engine.NewStore(),
+		Db: engine.NewStore(),
 	}
 }
 
 func (server *Server) Start() {
 
-	fmt.Printf("port : %s\n", server.Addr)
-	listener, err := net.Listen("tcp", server.Addr)
-	if err != nil {
+	//Read the configs
+	cfg := config.GetServerConfig()
+	addr := fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)
+	fmt.Printf("Starting server on: %s\n", addr)
 
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
 		fmt.Println("Error While Starting server: ", err)
 		panic(err)
 	}
@@ -42,22 +45,22 @@ func (server *Server) Start() {
 			continue
 		}
 
-		fmt.Println(connection)
-		tcpConn, ok := connection.(*net.TCPConn)
-		if ok {
-			fmt.Println("TCP info:")
-			fmt.Println("   Local address:", tcpConn.LocalAddr())
-			fmt.Println("   Remote address:", tcpConn.RemoteAddr())
-			fmt.Println("   Set keepalive:", tcpConn.SetKeepAlive(true))
-			fmt.Println("   Set keepalive period:", tcpConn.SetKeepAlivePeriod(30))
-		} else {
-			fmt.Println("Not a TCP connection !")
-		}
+		// fmt.Println(connection)
+		// tcpConn, ok := connection.(*net.TCPConn)
+		// if ok {
+		// 	fmt.Println("TCP info:")
+		// 	fmt.Println("   Local address:", tcpConn.LocalAddr())
+		// 	fmt.Println("   Remote address:", tcpConn.RemoteAddr())
+		// 	fmt.Println("   Set keepalive:", tcpConn.SetKeepAlive(true))
+		// 	fmt.Println("   Set keepalive period:", tcpConn.SetKeepAlivePeriod(30))
+		// } else {
+		// 	fmt.Println("Not a TCP connection !")
+		// }
 
+		//Run seperate Goroutine to handle connections
 		go server.handleConnection(connection)
-	} //for
-
-} //Start
+	}
+}
 
 func (server *Server) handleConnection(connection net.Conn) {
 
@@ -71,7 +74,7 @@ func (server *Server) handleConnection(connection net.Conn) {
 
 	for {
 
-		chunk := make([]byte, 4096)
+		chunk := make([]byte, 4096) //Read 4MB bytes
 		read, err := connection.Read(chunk)
 		if err != nil {
 			//EOF
