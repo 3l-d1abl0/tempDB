@@ -1,0 +1,7 @@
+server:
+  port: "8090"
+  host: "localhost"
+
+store:
+  segments_per_cpu: 4
+  cleanup_interval_seconds: 1
