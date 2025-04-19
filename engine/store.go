@@ -3,6 +3,8 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
+	"runtime"
 	"strconv"
 	"sync"
 	"tempDB/utils"
@@ -14,23 +16,46 @@ type KeyValue struct {
 	ExpireAt int64 // Unix timestamp for expiration, 0 means no expiration
 }
 
-type Store struct {
-	Mutex         *sync.RWMutex
-	Kv            map[string]KeyValue
+type segment struct {
+	mutex         *sync.RWMutex
+	kv            map[string]KeyValue
 	cleanupTicker *time.Ticker
+}
+
+type Store struct {
+	segments    []*segment
+	numSegments uint32
+}
+
+func (s *Store) getSegment(key string) *segment {
+	//Generate hash for Key
+	h := fnv.New32a()
+	h.Write([]byte(key))
+	return s.segments[h.Sum32()%s.numSegments]
 }
 
 func NewStore() Store {
 
-	newKeyValueStore := Store{
-		Mutex:         &sync.RWMutex{},
-		Kv:            make(map[string]KeyValue),
-		cleanupTicker: time.NewTicker(time.Second * 1),
+	// 4 segments per CPU core
+	numSegments := uint32(runtime.NumCPU() * 4)
+	segments := make([]*segment, numSegments)
+
+	for i, _ := range segments {
+
+		segments[i] = &segment{
+			mutex:         &sync.RWMutex{},
+			kv:            make(map[string]KeyValue),
+			cleanupTicker: time.NewTicker(time.Second * 1),
+		}
+
+		//goroutine to check expiry for every segment
+		go segments[i].cleanupLoop()
 	}
 
-	//goroutine to check expiry for entire Database
-	go newKeyValueStore.cleanupLoop()
-	return newKeyValueStore
+	return Store{
+		segments:    segments,
+		numSegments: numSegments,
+	}
 }
 
 func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
@@ -60,21 +85,26 @@ func (db *Store) executePing() ([]byte, error) {
 	return []byte("PONG"), nil
 }
 
+// Handle the parameters for GET command
 func (db *Store) executeGet(params []string) ([]byte, error) {
 
+	//KEY
 	if len(params) < 1 {
 		return []byte(""), errors.New("GET command requires a key")
 	}
 
-	db.Mutex.RLock()
-	defer db.Mutex.RUnlock()
+	key := params[0]
+	seg := db.getSegment(key)
 
-	if kv, exists := db.Kv[params[0]]; exists {
+	seg.mutex.RLock()
+	defer seg.mutex.RUnlock()
+
+	if kv, exists := seg.kv[key]; exists {
 
 		// Check if key has expired
 		if kv.ExpireAt != 0 && time.Now().Unix() > kv.ExpireAt {
 			//Remove key from db
-			delete(db.Kv, params[0])
+			delete(seg.kv, key)
 			return []byte("(nil)"), nil
 		}
 
@@ -85,19 +115,22 @@ func (db *Store) executeGet(params []string) ([]byte, error) {
 	return []byte("(nil)"), nil
 }
 
+// Handle the parameters for SET command
 func (db *Store) executeSet(params []string) ([]byte, error) {
 
+	//KEY VALUE EX 10
 	if len(params) < 2 {
 		return []byte(""), errors.New("SET command requires key and value")
 	}
 
-	fmt.Println("Waiting for Lock !")
-	db.Mutex.Lock()
-	fmt.Println("Granted")
-	defer db.Mutex.Unlock()
-
 	key, value := params[0], []byte(params[1])
 	fmt.Println(key, value)
+	seg := db.getSegment(key)
+
+	fmt.Println("Waiting for Lock !")
+	seg.mutex.Lock()
+	fmt.Println("Granted")
+	defer seg.mutex.Unlock()
 
 	var expireAt int64 = 0
 	//Check for Expiry
@@ -110,25 +143,29 @@ func (db *Store) executeSet(params []string) ([]byte, error) {
 		expireAt = time.Now().Unix() + seconds
 	}
 
-	db.Kv[key] = KeyValue{
+	seg.kv[key] = KeyValue{
 		Value:    value,
 		ExpireAt: expireAt,
 	}
+
 	return []byte("OK"), nil
 
 }
 
 func (db *Store) executeDel(params []string) ([]byte, error) {
+	//KEY
 	if len(params) < 1 {
 		return []byte(""), errors.New("DEL command requires at least one key")
 	}
 
-	db.Mutex.Lock()
-	defer db.Mutex.Unlock()
-
 	key := params[0]
-	if _, exists := db.Kv[key]; exists {
-		delete(db.Kv, key)
+	seg := db.getSegment(key)
+
+	seg.mutex.Lock()
+	defer seg.mutex.Unlock()
+
+	if _, exists := seg.kv[key]; exists {
+		delete(seg.kv, key)
 		return []byte("1"), nil // Returns 1 if key was deleted
 	}
 
@@ -136,51 +173,58 @@ func (db *Store) executeDel(params []string) ([]byte, error) {
 }
 
 func (db *Store) executeFlushDB() ([]byte, error) {
-	db.Mutex.Lock()
-	defer db.Mutex.Unlock()
 
-	// Clear the map
-	db.Kv = make(map[string]KeyValue)
+	//lock all segments for a complete flush
+	for _, seg := range db.segments {
+		seg.mutex.Lock()
+		defer seg.mutex.Unlock()
+
+		// Clear the map
+		seg.kv = make(map[string]KeyValue)
+	}
 
 	return []byte("OK"), nil
 }
 
 func (db *Store) executeExpire(params []string) ([]byte, error) {
 
-	//EXPIRE abc 10
 	//abc 10
 	if len(params) < 2 {
 		return []byte(""), errors.New("EXPIRE command requires key and seconds")
 	}
 
-	db.Mutex.Lock()
-	defer db.Mutex.Unlock()
-
 	key := params[0]
+	seg := db.getSegment(key)
+
 	//base10, should fit in int64
 	seconds, err := strconv.ParseInt(params[1], 10, 64)
 	if err != nil {
 		return []byte(""), errors.New("invalid expire time")
 	}
 
-	if value, exists := db.Kv[key]; exists {
+	seg.mutex.Lock()
+	defer seg.mutex.Unlock()
+
+	if value, exists := seg.kv[key]; exists {
 		value.ExpireAt = time.Now().Unix() + seconds
-		db.Kv[key] = value
+		seg.kv[key] = value
 		return []byte("1"), nil
 	}
 
 	return []byte("0"), nil
 }
 
-func (db *Store) cleanupLoop() {
-	for range db.cleanupTicker.C {
-		db.Mutex.Lock()
+// Cleanup per Segment
+func (seg *segment) cleanupLoop() {
+
+	for range seg.cleanupTicker.C {
+		seg.mutex.Lock()
 		now := time.Now().Unix()
-		for k, v := range db.Kv {
+		for k, v := range seg.kv {
 			if v.ExpireAt != 0 && now > v.ExpireAt {
-				delete(db.Kv, k)
+				delete(seg.kv, k)
 			}
 		}
-		db.Mutex.Unlock()
+		seg.mutex.Unlock()
 	}
 }
