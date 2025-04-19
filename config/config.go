@@ -33,15 +33,13 @@ func GetConfig() *Config {
 
 	//run once - singleton
 	once.Do(func() {
-		// Load .env file
-		if err := godotenv.Load(); err != nil {
-			panic("Error loading .env file")
-		}
+		// Load .env file, ignore error if file doesn't exist
+		godotenv.Load()
 
 		// Get config path from environment
 		configPath := os.Getenv("CONFIG_PATH")
 		if configPath == "" {
-			panic("CONFIG_PATH not set in .env file")
+			configPath = "config/config.yaml" // Default path
 		}
 
 		config, err := loadConfig(configPath)
