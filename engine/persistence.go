@@ -1,7 +1,10 @@
 package engine
 
 import (
+	"bufio"
 	"encoding/gob"
+	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 	"tempDB/config"
@@ -28,6 +31,10 @@ type PersistenceManager struct {
 
 // NewPersistenceManager creates a new PersistenceManager.
 func NewPersistenceManager() (*PersistenceManager, error) {
+
+	//Register the type
+	gob.Register(WALRecord{})
+
 	pm := &PersistenceManager{
 		mutex: &sync.Mutex{},
 	}
@@ -85,15 +92,81 @@ func (pm *PersistenceManager) WriteWALRecord(record WALRecord) error {
 
 // LoadSnapshot loads the database from the snapshot file.
 func (pm *PersistenceManager) LoadSnapshot() (map[string]KeyValue, error) {
-	return nil, nil
+	data := make(map[string]KeyValue)
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	// Reset the file pointer to the beginning of the file
+	_, err := pm.snapshotFile.Seek(0, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek snapshot file: %w", err)
+	}
+
+	decoder := json.NewDecoder(pm.snapshotFile)
+	err = decoder.Decode(&data)
+	if err != nil && err.Error() != "EOF" {
+		fmt.Println("Error decoding snapshot:", err)
+		return make(map[string]KeyValue), nil // Return empty map, but don't return the error
+	}
+
+	return data, nil
 }
 
 // SaveSnapshot saves the database to the snapshot file.
 func (pm *PersistenceManager) SaveSnapshot(data map[string]KeyValue) error {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	// Reset the file pointer to the beginning of the file
+	_, err := pm.snapshotFile.Seek(0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to seek snapshot file: %w", err)
+	}
+
+	// Truncate the file to remove any previous content
+	err = os.Truncate(pm.snapshotFile.Name(), 0)
+	if err != nil {
+		return fmt.Errorf("failed to truncate snapshot file: %w", err)
+	}
+
+	encoder := json.NewEncoder(pm.snapshotFile)
+	err = encoder.Encode(data)
+	if err != nil {
+		return fmt.Errorf("failed to encode snapshot data: %w", err)
+	}
+
 	return nil
 }
 
 // ReplayWAL replays the WAL log to restore the database.
 func (pm *PersistenceManager) ReplayWAL(apply func(record WALRecord) error) error {
+	pm.mutex.Lock()
+	defer pm.mutex.Unlock()
+
+	// Reset the file pointer to the beginning of the file
+	_, err := pm.walFile.Seek(0, 0)
+	if err != nil {
+		return fmt.Errorf("failed to seek WAL file: %w", err)
+	}
+
+	reader := bufio.NewReader(pm.walFile)
+	decoder := gob.NewDecoder(reader)
+
+	for {
+		var record WALRecord
+		err := decoder.Decode(&record)
+		if err != nil {
+			if err.Error() == "EOF" {
+				break // End of file
+			}
+			return fmt.Errorf("failed to decode WAL record: %w", err)
+		}
+
+		err = apply(record)
+		if err != nil {
+			return fmt.Errorf("failed to apply WAL record: %w", err)
+		}
+	}
+
 	return nil
 }

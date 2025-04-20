@@ -30,7 +30,6 @@ type Store struct {
 }
 
 func NewStore() Store {
-
 	//get db config
 	cfg := config.GetStoreConfig()
 	numSegments := uint32(runtime.NumCPU() * cfg.SegmentsPerCPU)
@@ -61,12 +60,14 @@ func NewStore() Store {
 	}
 
 	// Load snapshot
+	fmt.Println("Reading snapshot...")
 	snapshotData, err := persistenceManager.LoadSnapshot()
 	if err != nil {
 		fmt.Println("Failed to load snapshot:", err) // Log the error, but don't return it
 	}
 
 	// Apply snapshot data to segments
+	fmt.Println("Applying snapshot...")
 	for k, v := range snapshotData {
 		segment := s.getSegment(k)
 		segment.mutex.Lock()
@@ -75,6 +76,7 @@ func NewStore() Store {
 	}
 
 	// Replay WAL
+	fmt.Println("Replaying WAL...")
 	err = persistenceManager.ReplayWAL(func(record WALRecord) error {
 		segment := s.getSegment(record.Key)
 		segment.mutex.Lock()
@@ -105,7 +107,43 @@ func NewStore() Store {
 		fmt.Println("Failed to replay WAL:", err) // Log the error, but don't return it
 	}
 
+	//Start snapshotting
+	s.startSnapshotting()
+
 	return s
+}
+
+// Start snapshotting
+func (s *Store) startSnapshotting() {
+
+	//Read config
+	cfg := config.GetStoreConfig()
+	snapshotInterval := time.Duration(cfg.SnapshotIntervalSeconds) * time.Second
+	ticker := time.NewTicker(snapshotInterval)
+
+	go func() {
+		fmt.Println("Starting snapshotting...")
+		for range ticker.C {
+			// Create a map to hold the data for the snapshot
+			snapshotData := make(map[string]KeyValue)
+
+			// Iterate over all segments and copy the data
+			for _, segment := range s.segments {
+				segment.mutex.RLock()
+				for k, v := range segment.kv {
+					snapshotData[k] = v
+				}
+				segment.mutex.RUnlock()
+			}
+
+			err := s.persistenceManager.SaveSnapshot(snapshotData)
+			if err != nil {
+				fmt.Println("Failed to save snapshot:", err)
+			} else {
+				fmt.Println("Snapshot saved successfully")
+			}
+		}
+	}()
 }
 
 func (s *Store) getSegment(key string) *segment {
@@ -171,6 +209,8 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 		return db.executeFlushDB()
 	case "EXPIRE":
 		return db.executeExpire(command.Params)
+	case "TTL":
+		return db.executeTTL(command.Params)
 	default:
 		return []byte(""), errors.New("invalid command [Handler]")
 	}
@@ -311,6 +351,37 @@ func (db *Store) executeExpire(params []string) ([]byte, error) {
 	}
 
 	return []byte("0"), nil
+}
+
+func (db *Store) executeTTL(params []string) ([]byte, error) {
+	//KEY
+	if len(params) < 1 {
+		return []byte(""), errors.New("TTL command requires a key")
+	}
+
+	key := params[0]
+	seg := db.getSegment(key)
+
+	seg.mutex.RLock()
+	defer seg.mutex.RUnlock()
+
+	if kv, exists := seg.kv[key]; exists {
+
+		//check if no expiration is set
+		if kv.ExpireAt == 0 {
+			return []byte("-1"), nil
+		} else if kv.ExpireAt != 0 && time.Now().Unix() > kv.ExpireAt { // Check if key has expired
+			//Remove key from db
+			delete(seg.kv, key)
+			return []byte("-2"), nil
+		}
+
+		// Calculate TTL
+		ttl := kv.ExpireAt - time.Now().Unix()
+		return []byte(strconv.FormatInt(ttl, 10)), nil
+	}
+	//does not exist
+	return []byte("-2"), nil
 }
 
 // Cleanup per Segment

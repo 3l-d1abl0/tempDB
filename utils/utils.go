@@ -14,17 +14,7 @@ func validCommand(cmd string) bool {
 
 	switch cmd {
 
-	case "PING":
-		return true
-	case "GET":
-		return true
-	case "SET":
-		return true
-	case "DEL":
-		return true
-	case "FLUSHDB":
-		return true
-	case "EXPIRE":
+	case "PING", "GET", "SET", "DEL", "FLUSHDB", "EXPIRE", "TTL":
 		return true
 
 	default:
