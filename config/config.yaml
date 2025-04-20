@@ -8,4 +8,7 @@ store:
   wal_file_path: wal.log
   snapshot_file_path: snapshot.db
   wal_flush_interval_seconds: 1
-  snapshot_interval_seconds: 60
+  snapshot_interval_seconds: 120
+  wal_max_size_bytes: 450
+  wal_max_files: 5
+  wal_directory: wal

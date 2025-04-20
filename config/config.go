@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/joho/godotenv"
@@ -15,6 +16,9 @@ type StoreConfig struct {
 	SnapshotFilePath        string `yaml:"snapshot_file_path"`
 	WALFlushIntervalSeconds int    `yaml:"wal_flush_interval_seconds"`
 	SnapshotIntervalSeconds int    `yaml:"snapshot_interval_seconds"`
+	WALMaxSizeBytes         int64  `yaml:"wal_max_size_bytes"`
+	WALMaxFiles             int    `yaml:"wal_max_files"`
+	WALDirectory            string `yaml:"wal_directory"`
 }
 
 type ServerConfig struct {
@@ -96,6 +100,15 @@ func loadConfig(path string) (*Config, error) {
 	}
 	if config.Store.SnapshotIntervalSeconds == 0 {
 		config.Store.SnapshotIntervalSeconds = 300 // 5 minutes
+	}
+	if config.Store.WALMaxSizeBytes == 0 {
+		config.Store.WALMaxSizeBytes = 1024 * 1024 * 100 // 100MB default
+	}
+	if config.Store.WALMaxFiles == 0 {
+		config.Store.WALMaxFiles = 5 // Keep 5 WAL files
+	}
+	if config.Store.WALDirectory == "" {
+		config.Store.WALDirectory = filepath.Dir(config.Store.WALFilePath)
 	}
 	if config.Server.Port == "" {
 		config.Server.Port = "8090"
