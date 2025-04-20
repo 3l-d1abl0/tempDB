@@ -115,7 +115,6 @@ func NewStore() Store {
 
 // Start snapshotting
 func (s *Store) startSnapshotting() {
-
 	//Read config
 	cfg := config.GetStoreConfig()
 	snapshotInterval := time.Duration(cfg.SnapshotIntervalSeconds) * time.Second
@@ -124,26 +123,39 @@ func (s *Store) startSnapshotting() {
 	go func() {
 		fmt.Println("Starting snapshotting...")
 		for range ticker.C {
-			// Create a map to hold the data for the snapshot
-			snapshotData := make(map[string]KeyValue)
-
-			// Iterate over all segments and copy the data
-			for _, segment := range s.segments {
-				segment.mutex.RLock()
-				for k, v := range segment.kv {
-					snapshotData[k] = v
-				}
-				segment.mutex.RUnlock()
-			}
-
-			err := s.persistenceManager.SaveSnapshot(snapshotData)
-			if err != nil {
-				fmt.Println("Failed to save snapshot:", err)
-			} else {
-				fmt.Println("Snapshot saved successfully")
+			if err := s.createSnapshot(); err != nil {
+				fmt.Printf("ERR: Failed to create snapshot: %v\n", err)
 			}
 		}
 	}()
+}
+
+func (s *Store) createSnapshot() error {
+
+	//Create a map to hold the data for the snapshot
+	snapshotData := make(map[string]KeyValue)
+
+	//Iterate over all segments and copy the data
+	for _, segment := range s.segments {
+		segment.mutex.RLock()
+		for k, v := range segment.kv {
+			snapshotData[k] = v
+		}
+		segment.mutex.RUnlock()
+	}
+
+	// Save snapshot
+	if err := s.persistenceManager.SaveSnapshot(snapshotData); err != nil {
+		return fmt.Errorf("ERR: failed to save snapshot: %w", err)
+	}
+
+	// Force WAL rotation after successful snapshot
+	if err := s.persistenceManager.RotateWAL(); err != nil {
+		return fmt.Errorf("ERR: failed to rotate WAL after snapshot: %w", err)
+	}
+
+	fmt.Println("Snapshot and WAL rotation completed successfully")
+	return nil
 }
 
 func (s *Store) getSegment(key string) *segment {
