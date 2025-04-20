@@ -9,8 +9,12 @@ import (
 )
 
 type StoreConfig struct {
-	SegmentsPerCPU         int `yaml:"segments_per_cpu"`
-	CleanupIntervalSeconds int `yaml:"cleanup_interval_seconds"`
+	SegmentsPerCPU          int    `yaml:"segments_per_cpu"`
+	CleanupIntervalSeconds  int    `yaml:"cleanup_interval_seconds"`
+	WALFilePath             string `yaml:"wal_file_path"`
+	SnapshotFilePath        string `yaml:"snapshot_file_path"`
+	WALFlushIntervalSeconds int    `yaml:"wal_flush_interval_seconds"`
+	SnapshotIntervalSeconds int    `yaml:"snapshot_interval_seconds"`
 }
 
 type ServerConfig struct {
@@ -80,6 +84,18 @@ func loadConfig(path string) (*Config, error) {
 	}
 	if config.Store.CleanupIntervalSeconds == 0 {
 		config.Store.CleanupIntervalSeconds = 1
+	}
+	if config.Store.WALFilePath == "" {
+		config.Store.WALFilePath = "wal.log"
+	}
+	if config.Store.SnapshotFilePath == "" {
+		config.Store.SnapshotFilePath = "snapshot.db"
+	}
+	if config.Store.WALFlushIntervalSeconds == 0 {
+		config.Store.WALFlushIntervalSeconds = 1
+	}
+	if config.Store.SnapshotIntervalSeconds == 0 {
+		config.Store.SnapshotIntervalSeconds = 300 // 5 minutes
 	}
 	if config.Server.Port == "" {
 		config.Server.Port = "8090"
