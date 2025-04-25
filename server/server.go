@@ -83,7 +83,12 @@ func (server *Server) handleConnection(connection net.Conn) {
 			continue
 		}
 
-		response, dbError := server.Db.CommandHandler(cmd)
+		//the commnds are valid
+		command := utils.Request{
+			Command: cmd[0],
+			Params:  cmd[1:],
+		}
+		response, dbError := server.Db.CommandHandler(command)
 
 		if dbError != nil {
 			fmt.Println("ERR: ", dbError)
