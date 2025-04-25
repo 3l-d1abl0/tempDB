@@ -1,7 +1,7 @@
 package server
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
 	"net"
 	"tempDB/config"
@@ -45,7 +45,7 @@ func (server *Server) Start() {
 			continue
 		}
 
-		// fmt.Println(connection)
+		fmt.Println(connection)
 		// tcpConn, ok := connection.(*net.TCPConn)
 		// if ok {
 		// 	fmt.Println("TCP info:")
@@ -65,63 +65,34 @@ func (server *Server) Start() {
 func (server *Server) handleConnection(connection net.Conn) {
 
 	//defer connection.Close()
-
-	fmt.Printf("Processing new connection :\n")
-
-	var received int
-
-	buffer := bytes.NewBuffer(nil)
+	reader := bufio.NewReader(connection)
 
 	for {
 
-		chunk := make([]byte, 4096) //Read 4MB bytes
-		read, err := connection.Read(chunk)
+		//parse the incoming Bytes
+		cmd, err := utils.ParseRESP(reader)
 		if err != nil {
-			//EOF
-			fmt.Println(received, buffer.Bytes(), err)
-			return
+			connection.Write([]byte(err.Error()))
+			continue
+		}
+		fmt.Println("CMD: ", cmd)
+
+		//check the validity of the commands
+		if len(cmd) == 0 || !utils.ValidCommand(cmd) {
+			connection.Write([]byte("Invalid command"))
+			continue
 		}
 
-		received += read
-		buffer.Write(chunk[:read])
+		response, dbError := server.Db.CommandHandler(cmd)
 
-		if read == 0 || read < 4096 {
-			//fmt.Println(received, buffer.Bytes())
-			//Command
-			//fmt.Println((buffer))
-
-			//check for command Validity
-			request, err := utils.ParseCommands(buffer.String())
-			buffer.Reset()
-
-			if err != nil {
-				connection.Write([]byte(err.Error()))
-				continue
-			}
-
-			response, dbError := server.Db.CommandHandler(request)
-
-			if dbError != nil {
-				fmt.Println("ERR: ", dbError)
-				connection.Write([]byte("Failed"))
-			} else {
-				fmt.Println("RES: ", string(response))
-				connection.Write([]byte(response))
-			}
-
+		if dbError != nil {
+			fmt.Println("ERR: ", dbError)
+			connection.Write([]byte("Failed"))
+		} else {
+			fmt.Println("RES: ", string(response))
+			connection.Write([]byte(response))
 		}
+
 	} //for
 
-	/*
-		strBytes := []byte(request.Command)
-		strSliceBytes := make([][]byte, len(request.Params))
-		for i, s := range request.Params {
-			strSliceBytes[i] = []byte(s)
-		}
-
-		// Join the byte slices into a single byte slice
-		byteSlice := bytes.Join(append([][]byte{strBytes}, strSliceBytes...), []byte{})
-
-		connection.Write(byteSlice)
-	*/
 }
