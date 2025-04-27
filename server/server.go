@@ -75,7 +75,7 @@ func (server *Server) handleConnection(connection net.Conn) {
 			connection.Write([]byte(err.Error()))
 			continue
 		}
-		fmt.Println("CMD: ", cmd)
+		fmt.Println("Parsed: ", cmd)
 
 		//check the validity of the commands
 		if len(cmd) == 0 || !utils.ValidCommand(cmd) {
@@ -95,7 +95,7 @@ func (server *Server) handleConnection(connection net.Conn) {
 			connection.Write([]byte("Failed"))
 		} else {
 			fmt.Println("RES: ", string(response))
-			connection.Write([]byte(response))
+			connection.Write(response)
 		}
 
 	} //for

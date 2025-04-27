@@ -214,7 +214,7 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 	case "GET":
 		return db.Get(command.Params)
 	case "SET":
-		return db.executeSet(command.Params)
+		return db.Set(command.Params)
 	case "DEL":
 		return db.executeDel(command.Params)
 	case "FLUSHDB":
@@ -237,41 +237,6 @@ func (db *Store) Close() error {
 		}
 	}
 	return nil
-}
-
-// Handle the parameters for SET command
-func (db *Store) executeSet(params []string) ([]byte, error) {
-	//KEY VALUE EX 10
-	if len(params) < 2 {
-		return []byte(""), errors.New("SET command requires key and value")
-	}
-
-	key, value := params[0], []byte(params[1])
-	fmt.Println(key, value)
-	seg := db.getSegment(key)
-
-	fmt.Println("Waiting for Lock !")
-	seg.mutex.Lock()
-	fmt.Println("Granted")
-	defer seg.mutex.Unlock()
-
-	var expireAt int64 = 0
-	//Check for Expiry
-	if len(params) > 3 && params[2] == "EX" {
-		//base10, should fit in int64
-		seconds, err := strconv.ParseInt(params[3], 10, 64)
-		if err != nil {
-			return []byte(""), errors.New("invalid expire time")
-		}
-		expireAt = time.Now().Unix() + seconds
-	}
-
-	seg.kv[key] = KeyValue{
-		Value:    value,
-		ExpireAt: expireAt,
-	}
-
-	return []byte("OK"), nil
 }
 
 func (db *Store) executeDel(params []string) ([]byte, error) {
