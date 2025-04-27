@@ -210,7 +210,7 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 
 	switch command.Command {
 	case "PING":
-		return db.executePing()
+		return db.Ping()
 	case "GET":
 		return db.executeGet(command.Params)
 	case "SET":
@@ -237,10 +237,6 @@ func (db *Store) Close() error {
 		}
 	}
 	return nil
-}
-
-func (db *Store) executePing() ([]byte, error) {
-	return []byte("PONG"), nil
 }
 
 // Handle the parameters for GET command
