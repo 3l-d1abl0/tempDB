@@ -154,3 +154,17 @@ func (db *Store) Expire(params []string) ([]byte, error) {
 	//key does not exist
 	return []byte(":0\r\n"), nil
 }
+
+// Handles the parameters for FLUSHDB command
+func (db *Store) FlushDB() ([]byte, error) {
+	//lock all segments for a complete flush
+	for _, seg := range db.segments {
+		seg.mutex.Lock()
+		defer seg.mutex.Unlock()
+
+		// Clear the map
+		seg.kv = make(map[string]KeyValue)
+	}
+
+	return []byte("+OK\r\n"), nil
+}

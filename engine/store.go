@@ -216,13 +216,13 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 	case "DEL":
 		return db.Del(command.Params)
 	case "FLUSHDB":
-		return db.executeFlushDB()
+		return db.FlushDB()
 	case "EXPIRE":
 		return db.Expire(command.Params)
 	case "TTL":
 		return db.TTL(command.Params)
 	default:
-		return []byte(""), errors.New("invalid command [Handler]")
+		return []byte(""), errors.New("invalid command")
 	}
 }
 
@@ -235,19 +235,6 @@ func (db *Store) Close() error {
 		}
 	}
 	return nil
-}
-
-func (db *Store) executeFlushDB() ([]byte, error) {
-	//lock all segments for a complete flush
-	for _, seg := range db.segments {
-		seg.mutex.Lock()
-		defer seg.mutex.Unlock()
-
-		// Clear the map
-		seg.kv = make(map[string]KeyValue)
-	}
-
-	return []byte("OK"), nil
 }
 
 // Cleanup per Segment
