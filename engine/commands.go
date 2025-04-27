@@ -72,3 +72,23 @@ func (db *Store) Set(params []string) ([]byte, error) {
 
 	return []byte("+OK\r\n"), nil
 }
+
+func (db *Store) Del(params []string) ([]byte, error) {
+	//KEY
+	if len(params) < 1 {
+		return []byte(""), errors.New("-ERR DEL command requires at least one key\r\n")
+	}
+
+	key := params[0]
+	seg := db.getSegment(key)
+
+	seg.mutex.Lock()
+	defer seg.mutex.Unlock()
+
+	if _, exists := seg.kv[key]; exists {
+		delete(seg.kv, key)
+		return []byte(":1\r\n"), nil // Returns 1 if key was deleted
+	}
+
+	return []byte(":0\r\n"), nil // Returns 0 if key didn't exist
+}

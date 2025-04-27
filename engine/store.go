@@ -166,8 +166,6 @@ func (s *Store) getSegment(key string) *segment {
 }
 
 func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
-	fmt.Println("COMM: ", command.Command)
-	fmt.Println("ARGS: ", command.Params)
 
 	var record WALRecord
 
@@ -216,7 +214,7 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 	case "SET":
 		return db.Set(command.Params)
 	case "DEL":
-		return db.executeDel(command.Params)
+		return db.Del(command.Params)
 	case "FLUSHDB":
 		return db.executeFlushDB()
 	case "EXPIRE":
@@ -237,26 +235,6 @@ func (db *Store) Close() error {
 		}
 	}
 	return nil
-}
-
-func (db *Store) executeDel(params []string) ([]byte, error) {
-	//KEY
-	if len(params) < 1 {
-		return []byte(""), errors.New("DEL command requires at least one key")
-	}
-
-	key := params[0]
-	seg := db.getSegment(key)
-
-	seg.mutex.Lock()
-	defer seg.mutex.Unlock()
-
-	if _, exists := seg.kv[key]; exists {
-		delete(seg.kv, key)
-		return []byte("1"), nil // Returns 1 if key was deleted
-	}
-
-	return []byte("0"), nil // Returns 0 if key didn't exist
 }
 
 func (db *Store) executeFlushDB() ([]byte, error) {
