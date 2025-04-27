@@ -79,7 +79,7 @@ func (server *Server) handleConnection(connection net.Conn) {
 
 		//check the validity of the commands
 		if len(cmd) == 0 || !utils.ValidCommand(cmd) {
-			connection.Write([]byte("Invalid command"))
+			connection.Write([]byte("+Invalid command"))
 			continue
 		}
 
@@ -88,14 +88,16 @@ func (server *Server) handleConnection(connection net.Conn) {
 			Command: cmd[0],
 			Params:  cmd[1:],
 		}
+		fmt.Println("Computing ...: ", command)
 		response, dbError := server.Db.CommandHandler(command)
 
 		if dbError != nil {
 			fmt.Println("ERR: ", dbError)
-			connection.Write([]byte("Failed"))
+			connection.Write([]byte("+Failed"))
 		} else {
 			fmt.Println("RES: ", string(response))
 			connection.Write(response)
+			fmt.Println("Sent: ", string(response))
 		}
 
 	} //for
