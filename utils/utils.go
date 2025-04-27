@@ -90,13 +90,11 @@ func ParseRESP(r *bufio.Reader) ([]string, error) {
 		return nil, err
 	}
 
-	fmt.Println("LINE: ", line)
 	//check resp Format
 	if len(line) == 0 || line[0] != '*' {
 		return nil, fmt.Errorf("expected array")
 	}
 	numElements, err := strconv.Atoi(strings.TrimSpace(line[1:]))
-	fmt.Println("ELEMENTS: ", numElements)
 	if err != nil {
 		return nil, fmt.Errorf("invalid array length")
 	}
@@ -122,6 +120,5 @@ func ParseRESP(r *bufio.Reader) ([]string, error) {
 		result = append(result, string(bulkData[:bulkLen]))
 	}
 
-	fmt.Println("RESULT: ", result)
 	return result, nil
 }
