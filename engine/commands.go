@@ -125,3 +125,32 @@ func (db *Store) TTL(params []string) ([]byte, error) {
 	//does not exist
 	return []byte(":-2\r\n"), nil
 }
+
+// Handles the parameters for EXPIRE command
+func (db *Store) Expire(params []string) ([]byte, error) {
+	//abc 10
+	if len(params) < 2 {
+		return []byte(""), errors.New("-ERR EXPIRE command requires key and seconds")
+	}
+
+	key := params[0]
+	seg := db.getSegment(key)
+
+	//base10, should fit in int64
+	seconds, err := strconv.ParseInt(params[1], 10, 64)
+	if err != nil {
+		return []byte(""), errors.New("-ERR invalid expire time")
+	}
+
+	seg.mutex.Lock()
+	defer seg.mutex.Unlock()
+
+	if value, exists := seg.kv[key]; exists {
+		value.ExpireAt = time.Now().Unix() + seconds
+		seg.kv[key] = value
+		return []byte(":1\r\n"), nil
+	}
+
+	//key does not exist
+	return []byte(":0\r\n"), nil
+}

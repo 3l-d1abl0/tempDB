@@ -218,7 +218,7 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 	case "FLUSHDB":
 		return db.executeFlushDB()
 	case "EXPIRE":
-		return db.executeExpire(command.Params)
+		return db.Expire(command.Params)
 	case "TTL":
 		return db.TTL(command.Params)
 	default:
@@ -248,33 +248,6 @@ func (db *Store) executeFlushDB() ([]byte, error) {
 	}
 
 	return []byte("OK"), nil
-}
-
-func (db *Store) executeExpire(params []string) ([]byte, error) {
-	//abc 10
-	if len(params) < 2 {
-		return []byte(""), errors.New("EXPIRE command requires key and seconds")
-	}
-
-	key := params[0]
-	seg := db.getSegment(key)
-
-	//base10, should fit in int64
-	seconds, err := strconv.ParseInt(params[1], 10, 64)
-	if err != nil {
-		return []byte(""), errors.New("invalid expire time")
-	}
-
-	seg.mutex.Lock()
-	defer seg.mutex.Unlock()
-
-	if value, exists := seg.kv[key]; exists {
-		value.ExpireAt = time.Now().Unix() + seconds
-		seg.kv[key] = value
-		return []byte("1"), nil
-	}
-
-	return []byte("0"), nil
 }
 
 // Cleanup per Segment
