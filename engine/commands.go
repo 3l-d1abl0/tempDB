@@ -73,6 +73,7 @@ func (db *Store) Set(params []string) ([]byte, error) {
 	return []byte("+OK\r\n"), nil
 }
 
+// Handles the parameters for DEL command
 func (db *Store) Del(params []string) ([]byte, error) {
 	//KEY
 	if len(params) < 1 {
@@ -91,4 +92,36 @@ func (db *Store) Del(params []string) ([]byte, error) {
 	}
 
 	return []byte(":0\r\n"), nil // Returns 0 if key didn't exist
+}
+
+// Handles the parameters for TTL command
+func (db *Store) TTL(params []string) ([]byte, error) {
+	//KEY
+	if len(params) < 1 {
+		return []byte(""), errors.New("-ERR TTL command requires a key\r\n")
+	}
+
+	key := params[0]
+	seg := db.getSegment(key)
+
+	seg.mutex.RLock()
+	defer seg.mutex.RUnlock()
+
+	if kv, exists := seg.kv[key]; exists {
+
+		//check if no expiration is set
+		if kv.ExpireAt == 0 {
+			return []byte(":-1\r\n"), nil
+		} else if kv.ExpireAt != 0 && time.Now().Unix() > kv.ExpireAt { // Check if key has expired
+			//Remove key from db
+			delete(seg.kv, key)
+			return []byte(":-2\r\n"), nil
+		}
+
+		// Calculate TTL
+		ttl := kv.ExpireAt - time.Now().Unix()
+		return []byte(fmt.Sprintf(":%d\r\n", ttl)), nil
+	}
+	//does not exist
+	return []byte(":-2\r\n"), nil
 }

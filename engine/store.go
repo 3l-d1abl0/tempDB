@@ -220,7 +220,7 @@ func (db *Store) CommandHandler(command utils.Request) ([]byte, error) {
 	case "EXPIRE":
 		return db.executeExpire(command.Params)
 	case "TTL":
-		return db.executeTTL(command.Params)
+		return db.TTL(command.Params)
 	default:
 		return []byte(""), errors.New("invalid command [Handler]")
 	}
@@ -275,37 +275,6 @@ func (db *Store) executeExpire(params []string) ([]byte, error) {
 	}
 
 	return []byte("0"), nil
-}
-
-func (db *Store) executeTTL(params []string) ([]byte, error) {
-	//KEY
-	if len(params) < 1 {
-		return []byte(""), errors.New("TTL command requires a key")
-	}
-
-	key := params[0]
-	seg := db.getSegment(key)
-
-	seg.mutex.RLock()
-	defer seg.mutex.RUnlock()
-
-	if kv, exists := seg.kv[key]; exists {
-
-		//check if no expiration is set
-		if kv.ExpireAt == 0 {
-			return []byte("-1"), nil
-		} else if kv.ExpireAt != 0 && time.Now().Unix() > kv.ExpireAt { // Check if key has expired
-			//Remove key from db
-			delete(seg.kv, key)
-			return []byte("-2"), nil
-		}
-
-		// Calculate TTL
-		ttl := kv.ExpireAt - time.Now().Unix()
-		return []byte(strconv.FormatInt(ttl, 10)), nil
-	}
-	//does not exist
-	return []byte("-2"), nil
 }
 
 // Cleanup per Segment
