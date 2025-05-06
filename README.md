@@ -79,7 +79,7 @@ store:
 ### Connecting to TempDB
 
 
-Currently, the Database has upgradedd the communication protocol to a redis-like protocol.
+Currently, the Database has upgraded the communication protocol to a redis-like protocol.
 As of now, the rules are:
 
 1. ```+ Simple String (e.g., +OK\r\n)```
@@ -155,7 +155,7 @@ OR You can connect to TempDB using any TCP client. For example, using `telnet`:
 ```
 telnet localhost 8090
 ```
-and then issue the commands in the sam format.
+and then issue the commands in the same format.
 currently working on  [tempDB-client](https://github.com/3l-d1abl0/tempDB-client) for a smooth communication with the Database.
 
 ## Performance Considerations
