@@ -1,6 +1,5 @@
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp; ![tempDB](https://github.com/3l-d1abl0/tempDB/assets/temp-db.png)
 
-
+<img src="https://github.com/3l-d1abl0/tempDB/blob/main/assets/temp-db.png"></img>
 # TempDB - In-Memory Key-Value Database
 
 TempDB is a simple, lightweight, in-memory key-value store written in Go with persistence capabilities. It provides a Redis-like interface over TCP connections with support for basic data operations and key expiration.
